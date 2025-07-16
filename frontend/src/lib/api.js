@@ -34,6 +34,29 @@ export async function getUserFriends() {
   return response.data;
 }
 
+export async function declineFriendRequest(requestId) {
+  const response = await axiosInstance.put(`/users/friend-request/${requestId}/decline`);
+  return response.data;
+}
+
+// Delete a friend request entirely (removes from database)
+export async function deleteFriendRequest(requestId) {
+  const response = await axiosInstance.delete(`/users/friend-request/${requestId}`);
+  return response.data;
+}
+
+// Cancel an outgoing friend request (for sender)
+export async function cancelFriendRequest(requestId) {
+  const response = await axiosInstance.delete(`/users/friend-request/${requestId}/cancel`);
+  return response.data;
+}
+
+// Optional: Get friend requests with declined ones included
+export async function getFriendRequestsWithHistory() {
+  const response = await axiosInstance.get("/users/friend-requests-history");
+  return response.data;
+}
+
 export async function getRecommendedUsers() {
   const response = await axiosInstance.get("/users");
   return response.data;

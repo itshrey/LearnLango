@@ -53,18 +53,18 @@ export async function sendFriendRequest(req, res) {
       return res.status(400).json({ message: "You are already friends with this user" });
     }
 
-    // check if a req already exists
+    // check if a PENDING request already exists (ignore declined/accepted requests)
     const existingRequest = await FriendRequest.findOne({
       $or: [
-        { sender: myId, recipient: recipientId },
-        { sender: recipientId, recipient: myId },
+        { sender: myId, recipient: recipientId, status: "pending" },
+        { sender: recipientId, recipient: myId, status: "pending" },
       ],
     });
 
     if (existingRequest) {
       return res
         .status(400)
-        .json({ message: "A friend request already exists between you and this user" });
+        .json({ message: "A pending friend request already exists between you and this user" });
     }
 
     const friendRequest = await FriendRequest.create({
@@ -94,6 +94,13 @@ export async function acceptFriendRequest(req, res) {
       return res.status(403).json({ message: "You are not authorized to accept this request" });
     }
 
+    // Check if request is still pending
+    if (friendRequest.status !== "pending") {
+      return res.status(400).json({ 
+        message: `This friend request has already been ${friendRequest.status}` 
+      });
+    }
+
     friendRequest.status = "accepted";
     await friendRequest.save();
 
@@ -114,6 +121,70 @@ export async function acceptFriendRequest(req, res) {
   }
 }
 
+export async function declineFriendRequest(req, res) {
+  try {
+    const { id: requestId } = req.params;
+
+    const friendRequest = await FriendRequest.findById(requestId);
+
+    if (!friendRequest) {
+      return res.status(404).json({ message: "Friend request not found" });
+    }
+
+    // Verify the current user is the recipient
+    if (friendRequest.recipient.toString() !== req.user.id) {
+      return res.status(403).json({ message: "You are not authorized to decline this request" });
+    }
+
+    // Check if request is still pending
+    if (friendRequest.status !== "pending") {
+      return res.status(400).json({ 
+        message: `This friend request has already been ${friendRequest.status}` 
+      });
+    }
+
+    friendRequest.status = "declined";
+    await friendRequest.save();
+
+    res.status(200).json({ message: "Friend request declined" });
+  } catch (error) {
+    console.error("Error in declineFriendRequest controller", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function cancelFriendRequest(req, res) {
+  try {
+    const { id: requestId } = req.params;
+
+    const friendRequest = await FriendRequest.findById(requestId);
+
+    if (!friendRequest) {
+      return res.status(404).json({ message: "Friend request not found" });
+    }
+
+    // Verify the current user is the sender
+    if (friendRequest.sender.toString() !== req.user.id) {
+      return res.status(403).json({ message: "You are not authorized to cancel this request" });
+    }
+
+    // Check if request is still pending
+    if (friendRequest.status !== "pending") {
+      return res.status(400).json({ 
+        message: `Cannot cancel a friend request that has been ${friendRequest.status}` 
+      });
+    }
+
+    // Delete the friend request
+    await FriendRequest.findByIdAndDelete(requestId);
+
+    res.status(200).json({ message: "Friend request cancelled" });
+  } catch (error) {
+    console.error("Error in cancelFriendRequest controller", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
 export async function getFriendRequests(req, res) {
   try {
     const incomingReqs = await FriendRequest.find({
@@ -128,7 +199,7 @@ export async function getFriendRequests(req, res) {
 
     res.status(200).json({ incomingReqs, acceptedReqs });
   } catch (error) {
-    console.log("Error in getPendingFriendRequests controller", error.message);
+    console.log("Error in getFriendRequests controller", error.message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 }
